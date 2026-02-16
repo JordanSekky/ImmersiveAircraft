@@ -15,6 +15,9 @@ import java.util.function.Supplier;
 public class KeyBindings {
     public static final List<KeyMapping> list = new LinkedList<>();
 
+    public static final KeyMapping.Category CATEGORY = new KeyMapping.Category(
+            ResourceLocation.fromNamespaceAndPath(Main.MOD_ID, "immersive_aircraft_tab"));
+
     public static final KeyMapping left, right, forward, backward, up, down, pull, push;
     public static final KeyMapping dismount, boost, use;
 
@@ -74,9 +77,6 @@ public class KeyBindings {
     private static KeyMapping newMultiKey(String name, int defaultKey) {
         return newMultiKey(name, defaultKey, InputConstants.Type.KEYSYM);
     }
-
-    public static final KeyMapping.Category CATEGORY = new KeyMapping.Category(
-            ResourceLocation.fromNamespaceAndPath(Main.MOD_ID, "immersive_aircraft_tab"));
 
     private static KeyMapping newMultiKey(String name, int defaultKey, InputConstants.Type type) {
         KeyMapping key = new MultiKeyMapping(
