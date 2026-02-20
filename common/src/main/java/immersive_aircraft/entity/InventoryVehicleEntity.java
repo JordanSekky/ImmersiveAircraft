@@ -35,6 +35,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.ItemStackWithSlot;
 import net.minecraft.world.item.component.Fireworks;
 import net.minecraft.world.item.component.ItemContainerContents;
 import net.minecraft.world.level.Level;
@@ -48,7 +49,10 @@ import org.joml.Vector3f;
 import java.util.*;
 
 public abstract class InventoryVehicleEntity extends DyeableVehicleEntity implements ContainerListener, MenuProvider, Container, HasCustomInventoryScreen {
-    public static Codec<Pair<Integer, ItemStack>> INVENTORY_SLOT = Codec.pair(Codec.INT, ItemStack.CODEC);
+    public static final Codec<Pair<Integer, ItemStack>> INVENTORY_SLOT = Codec.pair(
+            Codec.INT.fieldOf("Slot").codec(),
+            ItemStack.CODEC.fieldOf("Stack").codec()
+    );
 
     private final VehicleProperties properties;
     private SparseSimpleInventory inventory;
@@ -182,15 +186,49 @@ public abstract class InventoryVehicleEntity extends DyeableVehicleEntity implem
     @Override
     protected void addAdditionalSaveData(@NotNull ValueOutput tag) {
         super.addAdditionalSaveData(tag);
-        ValueOutput.TypedOutputList<Pair<Integer, ItemStack>> list = tag.list("Inventory", INVENTORY_SLOT);
-        getInventory().storeAsIndexedItemList(list);
+
+        // Vanilla "slot + stack" entry codec
+        ValueOutput.TypedOutputList<ItemStackWithSlot> list = tag.list("Inventory", ItemStackWithSlot.CODEC);
+
+        Container inv = getInventory();
+        for (int slot = 0; slot < inv.getContainerSize(); slot++) {
+            ItemStack stack = inv.getItem(slot);
+            if (!stack.isEmpty()) {
+                // copy() avoids weirdness if the same instance is referenced elsewhere
+                list.add(new ItemStackWithSlot(slot, stack.copy()));
+            }
+        }
     }
 
     @Override
     protected void readAdditionalSaveData(@NotNull ValueInput tag) {
         super.readAdditionalSaveData(tag);
-        ValueInput.TypedInputList<Pair<Integer, ItemStack>> list = tag.listOrEmpty("Inventory", INVENTORY_SLOT);
-        getInventory().fromIndexedItemList(list);
+
+        SparseSimpleInventory inv = getInventory();
+        inv.clearContent();
+
+        boolean loadedAny = false;
+
+        // New format
+        for (ItemStackWithSlot entry : tag.listOrEmpty("Inventory", ItemStackWithSlot.CODEC)) {
+            if (entry.isValidInContainer(inv.getContainerSize())) {
+                inv.setItem(entry.slot(), entry.stack());
+                loadedAny = true;
+            }
+        }
+
+        // legacy fallback: try old Pair format if nothing loaded
+        if (!loadedAny) {
+            ValueInput.TypedInputList<Pair<Integer, ItemStack>> legacy =
+                    tag.listOrEmpty("Inventory", INVENTORY_SLOT);
+
+            for (Pair<Integer, ItemStack> p : legacy) {
+                int slot = p.getFirst();
+                if (slot >= 0 && slot < inv.getContainerSize()) {
+                    inv.setItem(slot, p.getSecond());
+                }
+            }
+        }
     }
 
     @Override
